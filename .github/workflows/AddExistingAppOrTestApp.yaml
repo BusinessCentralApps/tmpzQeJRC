@@ -13,12 +13,18 @@ on:
         description: Direct Download Url of .app or .zip file
         required: true
       directCommit:
-        description: Direct COMMIT (Y/N)
-        required: false
-        default: 'N'
+        description: Direct Commit?
+        type: boolean
+        default: false
+      useGhTokenWorkflow:
+        description: Use GhTokenWorkflow for PR/Commit?
+        type: boolean
+        default: false
 
 permissions:
+  actions: read
   contents: write
+  id-token: write
   pull-requests: write
 
 defaults:
@@ -31,31 +37,52 @@ env:
 
 jobs:
   AddExistingAppOrTestApp:
+    needs: [ ]
     runs-on: [ windows-latest ]
     steps:
+      - name: Dump Workflow Information
+        uses: businesscentralapps/tmp17YIaM-Actions/DumpWorkflowInfo@main
+        with:
+          shell: powershell
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Initialize the workflow
         id: init
-        uses: microsoft/AL-Go-Actions/WorkflowInitialize@v3.1
+        uses: businesscentralapps/tmp17YIaM-Actions/WorkflowInitialize@main
         with:
           shell: powershell
-          eventId: "DO0090"
+
+      - name: Read settings
+        uses: businesscentralapps/tmp17YIaM-Actions/ReadSettings@main
+        with:
+          shell: powershell
+
+      - name: Read secrets
+        id: ReadSecrets
+        uses: businesscentralapps/tmp17YIaM-Actions/ReadSecrets@main
+        with:
+          shell: powershell
+          gitHubSecrets: ${{ toJson(secrets) }}
+          getSecrets: 'TokenForPush'
+          useGhTokenWorkflowForPush: '${{ github.event.inputs.useGhTokenWorkflow }}'
 
       - name: Add existing app
-        uses: microsoft/AL-Go-Actions/AddExistingApp@v3.1
+        uses: businesscentralapps/tmp17YIaM-Actions/AddExistingApp@main
         with:
           shell: powershell
-          parentTelemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
+          token: ${{ steps.ReadSecrets.outputs.TokenForPush }}
           project: ${{ github.event.inputs.project }}
           url: ${{ github.event.inputs.url }}
           directCommit: ${{ github.event.inputs.directCommit }}
 
       - name: Finalize the workflow
         if: always()
-        uses: microsoft/AL-Go-Actions/WorkflowPostProcess@v3.1
+        uses: businesscentralapps/tmp17YIaM-Actions/WorkflowPostProcess@main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           shell: powershell
-          eventId: "DO0090"
           telemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
+          currentJobContext: ${{ toJson(job) }}
